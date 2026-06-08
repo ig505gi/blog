@@ -1,0 +1,264 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MySQL与PostgreSQL对比及SQL优化 — Ian Gao&#39;s Blog</title>
+  <meta name="description" content="MySQL和PostgreSQL索引原理对比、索引类型差异、优化器区别，以及SQL优化实战。">
+  
+  <link rel="canonical" href="https://ig505gi.github.io/blog/posts/MySQL与PostgreSQL对比/">
+  <meta property="og:title" content="MySQL与PostgreSQL对比及SQL优化">
+  <meta property="og:description" content="MySQL和PostgreSQL索引原理对比、索引类型差异、优化器区别，以及SQL优化实战。">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://ig505gi.github.io/blog/posts/MySQL与PostgreSQL对比/">
+  <meta property="og:site_name" content="Ian Gao&#39;s Blog">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="MySQL与PostgreSQL对比及SQL优化">
+  <meta name="twitter:description" content="MySQL和PostgreSQL索引原理对比、索引类型差异、优化器区别，以及SQL优化实战。">
+  <link rel="preload" href="/blog/fonts/TsangerJinKai02.woff2" as="font" type="font/woff2" crossorigin>
+  
+<link rel="stylesheet" href="/blog/css/style.css">
+
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "MySQL与PostgreSQL对比及SQL优化",
+    "description": "MySQL和PostgreSQL索引原理对比、索引类型差异、优化器区别，以及SQL优化实战。",
+    "url": "https://ig505gi.github.io/blog/posts/MySQL与PostgreSQL对比/",
+    "datePublished": "2024-11-08",
+    "dateModified": "2026-06-08",
+    "author": {
+      "@type": "Person",
+      "name": "Ian Gao"
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://ig505gi.github.io/blog/posts/MySQL与PostgreSQL对比/"
+    }
+  }
+  </script>
+  
+<meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/blog/atom.xml" title="Ian Gao's Blog" type="application/atom+xml">
+</head>
+<body class="page-post">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/blog/" class="site-logo">Ian Gao&#39;s Blog</a>
+      <nav class="header-nav" id="headerNav">
+        <div class="header-menu" id="headerMenu">
+          <div class="cat-dropdown" id="catDropdown">
+            <button class="cat-btn" id="catBtn">
+              全部文章
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="cat-menu" id="catMenu">
+              <a href="/blog/">全部文章</a>
+              
+                <a href="/blog/categories/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">学习笔记</a>
+              
+                <a href="/blog/categories/AI%E5%AE%9E%E6%88%98/">AI实战</a>
+              
+            </div>
+          </div>
+          <hr class="mobile-divider">
+          
+            <a href="https://github.com/ig505gi" class="header-link" target="_blank" rel="noopener">GitHub</a>
+          
+          
+          
+            <a href="https://x.com/ig505gi" class="header-link" target="_blank" rel="noopener">X</a>
+          
+          <a href="https://ig505gi.github.io/" class="header-link">About Me</a>
+        </div>
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="菜单" aria-expanded="false" aria-controls="headerMenu">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    
+<div class="article-wrap">
+  <div class="article-main">
+    <article>
+      <header class="article-header">
+        
+        
+        <h1>MySQL与PostgreSQL对比及SQL优化</h1>
+        <div class="article-tags">
+          <span class="tag">2024-11-08</span>
+          <span class="tag">1082 字</span>
+          
+            <span class="tag cat">学习笔记</span>
+          
+        </div>
+      </header>
+
+      <div class="article-body">
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>最近接手了新项目，数据库是PG，跟之前的MySQL很像，但还是有点差别，主要从索引和优化的角度来对比学习。</p>
+<hr>
+<h2 id="MySQL-PostgreSQL对比"><a href="#MySQL-PostgreSQL对比" class="headerlink" title="MySQL&amp;PostgreSQL对比"></a>MySQL&amp;PostgreSQL对比</h2><h3 id="索引原理"><a href="#索引原理" class="headerlink" title="索引原理"></a>索引原理</h3><h4 id="快速搜索"><a href="#快速搜索" class="headerlink" title="快速搜索"></a>快速搜索</h4><ul>
+<li>哈希：算法复杂度O(1)，高效的等值查找，缺点是不支持范围查询，还有哈希冲突问题需要解决</li>
+<li>二分法：可以将O(n)时间复杂度降低到O(log n)，二叉树作为索引存在很多问题，比如树的高度太高，数据容易出现不平衡</li>
+</ul>
+<h4 id="B-tree和B-tree"><a href="#B-tree和B-tree" class="headerlink" title="B-tree和B+tree"></a>B-tree和B+tree</h4><p>B-tree<br><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/b-tree.png" alt="B-tree"></p>
+<p>B+tree<br><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/b-plus-tree.png" alt="B+tree"></p>
+<h3 id="索引类型"><a href="#索引类型" class="headerlink" title="索引类型"></a>索引类型</h3><table>
+<thead>
+<tr>
+<th align="center">索引类型</th>
+<th align="center">MySQL</th>
+<th align="center">PostgreSQL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">B-tree</td>
+<td align="center">默认索引</td>
+<td align="center">默认索引</td>
+</tr>
+<tr>
+<td align="center">Hash</td>
+<td align="center">InnoDB不支持</td>
+<td align="center">支持</td>
+</tr>
+<tr>
+<td align="center">Full-text</td>
+<td align="center">支持</td>
+<td align="center">支持，更强大</td>
+</tr>
+</tbody></table>
+<h3 id="索引对比"><a href="#索引对比" class="headerlink" title="索引对比"></a>索引对比</h3><ul>
+<li>Mysql: InnoDB是B+tree（聚集索引+非聚集索引）</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>主索引</th>
+<th>辅助索引</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/mysql-primary-index.png" alt="主索引"></td>
+<td><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/mysql-secondary-index.png" alt="辅助索引"></td>
+</tr>
+</tbody></table>
+<ul>
+<li>Pg: B+tree的变形（非聚集索引）<br><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/pg-index.png" alt="PostgreSQL索引"></li>
+</ul>
+<h3 id="使用场景差别"><a href="#使用场景差别" class="headerlink" title="使用场景差别"></a>使用场景差别</h3><h4 id="主键"><a href="#主键" class="headerlink" title="主键"></a>主键</h4><ul>
+<li>MySQL：主键最好不要太长，会出现在所有的二级索引中（因此我们用自增）</li>
+<li>PostgreSQL：没有这个问题</li>
+</ul>
+<h4 id="查询操作"><a href="#查询操作" class="headerlink" title="查询操作"></a>查询操作</h4><table>
+<thead>
+<tr>
+<th>MySQL</th>
+<th>PostgreSQL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/mysql-query.png" alt="MySQL查询"></td>
+<td><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/pg-query.png" alt="PostgreSQL查询"></td>
+</tr>
+</tbody></table>
+<h4 id="联合索引和范围查找"><a href="#联合索引和范围查找" class="headerlink" title="联合索引和范围查找"></a>联合索引和范围查找</h4><ul>
+<li>MySQL：当左侧索引进行范围查找时，剩余的索引不会生效</li>
+<li>PostgreSQL：剩余索引会生效<br>原因：优化器的不同（TODO 为什么）</li>
+</ul>
+<h4 id="插入-更新操作"><a href="#插入-更新操作" class="headerlink" title="插入&#x2F;更新操作"></a>插入&#x2F;更新操作</h4><ul>
+<li>MySQL：保证存储顺序，在原有数据上更新</li>
+<li>PostgreSQL：在桶里新增数据，保留原始数据，后续可用在事务的回滚上</li>
+</ul>
+<h3 id="优化器"><a href="#优化器" class="headerlink" title="优化器"></a>优化器</h3><p><img src="/blog/posts/MySQL%E4%B8%8EPostgreSQL%E5%AF%B9%E6%AF%94/optimizer.png" alt="优化器"></p>
+<h4 id="优化器的区别"><a href="#优化器的区别" class="headerlink" title="优化器的区别"></a>优化器的区别</h4><p>MySQL 优化器</p>
+<ul>
+<li><strong>简单高效</strong>：MySQL 的优化器设计注重简单性和效率，目标是在大多数情况下提供良好的性能，而不需要过于复杂的优化策略。</li>
+<li><strong>基于规则和成本</strong>：MySQL 的优化器结合了基于规则的优化和基于成本的优化。基于规则的优化主要用于处理常见的查询模式，而基于成本的优化则用于评估不同执行计划的成本。</li>
+<li><strong>分阶段优化</strong>：MySQL 的优化过程分为多个阶段，包括逻辑转换、优化准备、基于成本优化和执行计划改进。</li>
+</ul>
+<p>PostgreSQL 优化器</p>
+<ul>
+<li><strong>高度灵活</strong>：PostgreSQL 的优化器设计更加灵活和复杂，能够处理更广泛的查询模式和优化需求。</li>
+<li><strong>基于成本</strong>：PostgreSQL 的优化器主要基于成本模型，通过详细的统计信息和复杂的算法来评估不同执行计划的成本，选择最优的执行计划。</li>
+<li><strong>动态规划和遗传算法</strong>：PostgreSQL 优化器使用动态规划和遗传算法来生成和选择最优的执行计划，特别是在处理多表连接时。</li>
+</ul>
+<hr>
+<h2 id="SQL优化"><a href="#SQL优化" class="headerlink" title="SQL优化"></a>SQL优化</h2><h3 id="索引使用"><a href="#索引使用" class="headerlink" title="索引使用"></a>索引使用</h3><blockquote>
+<p>建议不超过5个索引</p>
+</blockquote>
+<p>哪些列应该加索引</p>
+<blockquote>
+<ul>
+<li>在where语句中的</li>
+<li>order by &#x2F; group by &#x2F; distinct中出现的</li>
+<li>join on中出现的</li>
+</ul>
+</blockquote>
+<p>联合索引的顺序</p>
+<blockquote>
+<ul>
+<li>区分度最高：重复的少</li>
+<li>字段长度小的放左侧</li>
+<li>频繁用的放在左侧</li>
+</ul>
+</blockquote>
+<p>索引失效的场景</p>
+<blockquote>
+<ul>
+<li>like ‘%123’</li>
+<li>not in（用left join和not exists优化）</li>
+<li>null值判断</li>
+<li>数据类型隐式转换</li>
+<li>使用or</li>
+</ul>
+</blockquote>
+<h3 id="实战"><a href="#实战" class="headerlink" title="实战"></a>实战</h3><p><strong>分析SQL执行计划</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">explain &quot;your sql&quot; </span><br><span class="line">desc &quot;your sql&quot; </span><br><span class="line">- 部分参数分析</span><br><span class="line"></span><br><span class="line">select_type: </span><br><span class="line">- SIMPLE 简单表，不使用表连接或子查询 </span><br><span class="line">- PRIMARY 主查询，即外层的查询 </span><br><span class="line">- UNION SUBQUER 子查询的第一个select </span><br><span class="line"> </span><br><span class="line">type: </span><br><span class="line">- ALL 全表扫描 </span><br><span class="line">- index 索引全扫描 </span><br><span class="line">- range 索引范围扫描 </span><br><span class="line">- ref 使用非唯一索引或唯一索引的前缀扫描 </span><br><span class="line">- eq_ref 类似ref，使用的索引是唯一索引 </span><br><span class="line">- const/system 单表中最多有一个匹配行 </span><br><span class="line">- NULL 不用访问表或者索引，直接得到结果</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="参考文档"><a href="#参考文档" class="headerlink" title="参考文档"></a>参考文档</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/huchong/p/10219318.html">https://www.cnblogs.com/huchong/p/10219318.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/jack__frost/article/details/72571540">https://blog.csdn.net/jack__frost/article/details/72571540</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/myNameIsMT/article/details/103517175">https://blog.csdn.net/myNameIsMT/article/details/103517175</a></li>
+<li><a target="_blank" rel="noopener" href="https://developer.aliyun.com/article/790244">https://developer.aliyun.com/article/790244</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1762174">https://cloud.tencent.com/developer/article/1762174</a></li>
+</ul>
+
+      </div>
+    </article>
+  </div>
+
+  <aside class="toc-sidebar collapsed" id="tocSidebar">
+    <div class="toc-label" id="tocLabel">目录</div>
+    <nav id="tocNav"></nav>
+  </aside>
+</div>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>&copy; 2026 Ian Gao&#39;s Blog</p>
+  </footer>
+
+  <div class="lightbox-overlay" id="lightboxOverlay">
+    <img id="lightboxImg" src="" alt="">
+  </div>
+
+  
+<script src="/blog/js/main.js"></script>
+
+  
+    <div class="busuanzi-hidden" aria-hidden="true">
+      <span id="busuanzi_container_site_pv">访问量 <span id="busuanzi_value_site_pv">-</span></span>
+      <span id="busuanzi_container_site_uv">访客数 <span id="busuanzi_value_site_uv">-</span></span>
+    </div>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+  
+
+</body>
+</html>

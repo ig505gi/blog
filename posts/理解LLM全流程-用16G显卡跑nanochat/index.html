@@ -1,0 +1,282 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>理解 LLM 全流程——用 16G 显卡跑 nanochat — Ian Gao&#39;s Blog</title>
+  <meta name="description" content="跟着Karpathy的nanochat，用一张5060ti-16G显卡跑通LLM全流程：分词、预训练、SFT、eval、推理部署。搞清楚Chat应用端到端到底发生了什么。">
+  
+  <link rel="canonical" href="https://ig505gi.github.io/blog/posts/理解LLM全流程-用16G显卡跑nanochat/">
+  <meta property="og:title" content="理解 LLM 全流程——用 16G 显卡跑 nanochat">
+  <meta property="og:description" content="跟着Karpathy的nanochat，用一张5060ti-16G显卡跑通LLM全流程：分词、预训练、SFT、eval、推理部署。搞清楚Chat应用端到端到底发生了什么。">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://ig505gi.github.io/blog/posts/理解LLM全流程-用16G显卡跑nanochat/">
+  <meta property="og:site_name" content="Ian Gao&#39;s Blog">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="理解 LLM 全流程——用 16G 显卡跑 nanochat">
+  <meta name="twitter:description" content="跟着Karpathy的nanochat，用一张5060ti-16G显卡跑通LLM全流程：分词、预训练、SFT、eval、推理部署。搞清楚Chat应用端到端到底发生了什么。">
+  <link rel="preload" href="/blog/fonts/TsangerJinKai02.woff2" as="font" type="font/woff2" crossorigin>
+  
+<link rel="stylesheet" href="/blog/css/style.css">
+
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "理解 LLM 全流程——用 16G 显卡跑 nanochat",
+    "description": "跟着Karpathy的nanochat，用一张5060ti-16G显卡跑通LLM全流程：分词、预训练、SFT、eval、推理部署。搞清楚Chat应用端到端到底发生了什么。",
+    "url": "https://ig505gi.github.io/blog/posts/理解LLM全流程-用16G显卡跑nanochat/",
+    "datePublished": "2026-05-21",
+    "dateModified": "2026-06-08",
+    "author": {
+      "@type": "Person",
+      "name": "Ian Gao"
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://ig505gi.github.io/blog/posts/理解LLM全流程-用16G显卡跑nanochat/"
+    }
+  }
+  </script>
+  
+<meta name="generator" content="Hexo 8.1.2"><link rel="alternate" href="/blog/atom.xml" title="Ian Gao's Blog" type="application/atom+xml">
+</head>
+<body class="page-post">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/blog/" class="site-logo">Ian Gao&#39;s Blog</a>
+      <nav class="header-nav" id="headerNav">
+        <div class="header-menu" id="headerMenu">
+          <div class="cat-dropdown" id="catDropdown">
+            <button class="cat-btn" id="catBtn">
+              全部文章
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="cat-menu" id="catMenu">
+              <a href="/blog/">全部文章</a>
+              
+                <a href="/blog/categories/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">学习笔记</a>
+              
+                <a href="/blog/categories/AI%E5%AE%9E%E6%88%98/">AI实战</a>
+              
+            </div>
+          </div>
+          <hr class="mobile-divider">
+          
+            <a href="https://github.com/ig505gi" class="header-link" target="_blank" rel="noopener">GitHub</a>
+          
+          
+          
+            <a href="https://x.com/ig505gi" class="header-link" target="_blank" rel="noopener">X</a>
+          
+          <a href="https://ig505gi.github.io/" class="header-link">About Me</a>
+        </div>
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="菜单" aria-expanded="false" aria-controls="headerMenu">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    
+<div class="article-wrap">
+  <div class="article-main">
+    <article>
+      <header class="article-header">
+        
+        
+        <h1>理解 LLM 全流程——用 16G 显卡跑 nanochat</h1>
+        <div class="article-tags">
+          <span class="tag">2026-05-21</span>
+          <span class="tag">2735 字</span>
+          
+            <span class="tag cat">AI实战</span>
+          
+        </div>
+      </header>
+
+      <div class="article-body">
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p><img src="/blog/posts/%E7%90%86%E8%A7%A3LLM%E5%85%A8%E6%B5%81%E7%A8%8B-%E7%94%A816G%E6%98%BE%E5%8D%A1%E8%B7%91nanochat/nanochat_artifact_flow_preview.png" alt="nanochat_artifact_flow_preview"><br>本文核心目标是理解大模型Chat应用端到端的全流程，并不是“训练出来一个多强的模型”。</p>
+<blockquote>
+<p>开始，我们只有一些散落的文本<br>最后，我们会得到一个傻乎乎的聊天机器人</p>
+</blockquote>
+<hr>
+<h2 id="分词"><a href="#分词" class="headerlink" title="分词"></a>分词</h2><h3 id="下载预训练数据集"><a href="#下载预训练数据集" class="headerlink" title="下载预训练数据集"></a>下载预训练数据集</h3><p>跑<code>dataset.py</code>，数据从Hugging Face下载, 默认要下载的数量是<code>MAX_SHARD = 6542</code>，方便起见，我为了一晚上能训练完，只下载了50个。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ian@Ian-Gao-PC:~/.cache/nanochat/base_data_climbmix$ find . -maxdepth 1 -<span class="built_in">type</span> f -<span class="built_in">printf</span> <span class="string">&#x27;%f %s bytes\n&#x27;</span> | <span class="built_in">sort</span></span><br><span class="line">shard_00000.parquet 92291918 bytes</span><br><span class="line">shard_00001.parquet 92124317 bytes</span><br><span class="line">...</span><br><span class="line">shard_00039.parquet 91480777 bytes</span><br><span class="line">shard_00040.parquet 91501658 bytes</span><br><span class="line">shard_06542.parquet 91699537 bytes</span><br></pre></td></tr></table></figure>
+
+<p>文件的内容大概是这样的清理过的文本,取前两行：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">row[0]:</span><br><span class="line">&#123;&quot;text&quot;: &quot;Ruby Sparx Biography/Wiki, Age, Height, Career, Photos &amp; More\nWhat you&#x27;re experiencing at the beginning of the cycle is higher pressure caused by the angle of the wheel.\nWe currently have 3 ProSharp machines, and an older triple head BladeMaster.\nDo you have diamond wheels on them now?? There&#x27;s a point where you aren&#x27;t so high that it cuts out, but you&#x27;re still too high in that a smooth continuous pass doesn&#x27;t occur, instead the ring chatters and changes pitch sound along the length of the runner.\nThe fact that it is not out of alignment is surprising.\nRuby Sparks Movie Review\nListen to the pass any chatter? I thought there was only a height adjustment and that wouldn&#x27;tchange the actual pressure.\n\nQuestion: What is the name of the older machine mentioned? Answer: BladeMaster&quot;&#125;</span><br><span class="line"></span><br><span class="line">row[1]:</span><br><span class="line">&#123;&quot;text&quot;: &quot;|Manufacturer||SociÃ©tÃ© des Ateliers d&#x27;Aviation Louis BrÃ©guet|\n|Primary Role||Light Bomber|\nContributor: Alan Chanter\nww2dbaseAlmost certainly built in larger numbers than any other warplane type in the period between the world wars, the Bre.19 was designed as asuccessor to the Bre.14 that had performed so magnificently in World War I. A two seat biplane that employed a substantial amount of aluminium alloy in its structure, the Bre.19 demonstrated the measure of progress that had been made in aircraft development since the end of the war (it weighed the same as it Breguet predecessor but could carry a payload that was up to 80 per cent greater). The Bre.19 was developed to be either an observation and reconnaissance aircraft (in its A.2 version) or a day bomber (in its B.2 version). The prototype, which first appeared in public at the Paris Salon de lâ€™AÃ©ronautique, was initially fitted with the experimental Brequet-Bugatti 16-cylinder engine, but was subsequently fitted with the 450-hp Renault 12Kb 12 cylinder Vee with which the type made its maiden flight in March 1922.\nww2dbaseProduction commenced in 1923 and by 1927 some 2,000 Bre.19s (equally divided betwee</span><br></pre></td></tr></table></figure>
+<p>使用的脚本如下</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/Github/nanochat$ python - &lt;&lt;<span class="string">&#x27;PY&#x27;</span></span><br><span class="line">import json</span><br><span class="line">import pyarrow.parquet as pq</span><br><span class="line"></span><br><span class="line">p = <span class="string">&quot;/home/ian/.cache/nanochat/base_data_climbmix/shard_00016.parquet&quot;</span></span><br><span class="line">pf = pq.ParquetFile(p)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;file:&quot;</span>, p)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;rows:&quot;</span>, pf.metadata.num_rows)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;row_groups:&quot;</span>, pf.num_row_groups)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;schema:&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(pf.schema)</span><br><span class="line"></span><br><span class="line">rows = pf.read_row_group(0).slice(0, 2).to_pylist()</span><br><span class="line"><span class="keyword">for</span> i, row <span class="keyword">in</span> enumerate(rows):</span><br><span class="line">    <span class="built_in">print</span>(f<span class="string">&quot;\nrow[&#123;i&#125;]:&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(json.dumps(row, ensure_ascii=False)[:1200])</span><br><span class="line">PY</span><br><span class="line"></span><br><span class="line">file: /home/ian/.cache/nanochat/base_data_climbmix/shard_00016.parquet</span><br><span class="line">rows: 84992</span><br><span class="line">row_groups: 83</span><br><span class="line">schema:</span><br><span class="line">&lt;pyarrow._parquet.ParquetSchema object at 0x7f0d41c431c0&gt;</span><br><span class="line">required group field_id=-1 schema &#123;</span><br><span class="line">  optional binary field_id=-1 text (String);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="tokenizer训练"><a href="#tokenizer训练" class="headerlink" title="tokenizer训练"></a>tokenizer训练</h3><p>跑<code>tok_train.py</code> 脚本</p>
+<ul>
+<li>使用<code>parquets_iter_batched</code>方法批量读取shard文件</li>
+<li>使用<code>RustBPETokenizer.train_from_iterator</code>来训练Tokenizer</li>
+<li>得到的<code>tokenizer.pkl</code>，内容可以理解为<code>分词规则+分词词典</code></li>
+<li>得到的<code>token_bytes.pt</code>是优化计算的缓存。<br>tokenizer 在后续预训练、SFT、eval、CLI都会用到.</li>
+</ul>
+<blockquote>
+<p>CPU 100%、GPU 不动、约 40 秒结束</p>
+</blockquote>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/tokenizer$ ll</span><br><span class="line">total 544</span><br><span class="line">drwxr-xr-x  2 ian ian   4096 May 24 20:36 ./</span><br><span class="line">drwxr-xr-x 11 ian ian   4096 May 26 11:49 ../</span><br><span class="line">-rw-r--r--  1 ian ian 132649 May 24 20:36 token_bytes.pt</span><br><span class="line">-rw-r--r--  1 ian ian 412105 May 24 20:36 tokenizer.pkl</span><br></pre></td></tr></table></figure>
+
+<p>在脚本中可以使用<code>get_tokenizer</code>获取分词器来<code>encode</code>或者<code>decode</code>。如下代码是使用示例。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/Github/nanochat$ python - &lt;&lt;<span class="string">&#x27;PY&#x27;</span></span><br><span class="line">import os</span><br><span class="line">from nanochat.tokenizer import get_tokenizer</span><br><span class="line"></span><br><span class="line">base = <span class="string">&quot;/home/ian/.cache/nanochat/tokenizer&quot;</span></span><br><span class="line"><span class="keyword">for</span> name <span class="keyword">in</span> [<span class="string">&quot;tokenizer.pkl&quot;</span>, <span class="string">&quot;token_bytes.pt&quot;</span>]:</span><br><span class="line">    p = os.path.join(base, name)</span><br><span class="line">    <span class="built_in">print</span>(name, os.path.getsize(p), <span class="string">&quot;bytes&quot;</span>)</span><br><span class="line"></span><br><span class="line">tok = get_tokenizer()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;vocab_size:&quot;</span>, tok.get_vocab_size())</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;special_tokens:&quot;</span>, sorted(tok.get_special_tokens()))</span><br><span class="line"></span><br><span class="line">text = <span class="string">&quot;Hello nanochat! Hello world!&quot;</span></span><br><span class="line">ids = tok.encode(text)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;text:&quot;</span>, text)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;ids:&quot;</span>, ids)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;decoded:&quot;</span>, tok.decode(ids))</span><br><span class="line">PY</span><br><span class="line"></span><br><span class="line">tokenizer.pkl 412105 bytes</span><br><span class="line">token_bytes.pt 132649 bytes</span><br><span class="line">vocab_size: 32768</span><br><span class="line">special_tokens: [<span class="string">&#x27;&lt;|assistant_end|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|assistant_start|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|bos|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|output_end|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|output_start|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|python_end|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|python_start|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|user_end|&gt;&#x27;</span>, <span class="string">&#x27;&lt;|user_start|&gt;&#x27;</span>]</span><br><span class="line">text: Hello nanochat! Hello world!</span><br><span class="line">ids: [14051, 4324, 4918, 265, 33, 28820, 987, 33]</span><br><span class="line">decoded: Hello nanochat! Hello world!</span><br></pre></td></tr></table></figure>
+<hr>
+<h2 id="预训练"><a href="#预训练" class="headerlink" title="预训练"></a>预训练</h2><h3 id="预训练基座模型"><a href="#预训练基座模型" class="headerlink" title="预训练基座模型"></a>预训练基座模型</h3><p>跑<code>base_train.py</code>, 会使用到：</p>
+<ul>
+<li><code>tokenizer</code>：在121行加载</li>
+<li><code>data shard</code>：在331行读取</li>
+</ul>
+<p>做了一些粗略的参数分析，smoke训练，为了能一晚上训练完，使用<code>depth=12</code>、<code>max_seq_len=512</code>、<code>device_batch_size=8</code>、<code>total_batch_size=65536</code>进行预训练，最终 step 20160 完成。</p>
+<p>（事后回顾这里的取舍，当时是优先节省显存和时间，max_seq_len&#x3D;512的设定比较保守，仓促，也许可以设置更大再跑）</p>
+<blockquote>
+<p>训练速度约 41k-42k tok&#x2F;sec，总训练时间约 516 分钟，峰值显存约 4.5 GB</p>
+</blockquote>
+<p>最终结果每2000步都会有一个checkpint，其中</p>
+<ul>
+<li>model_*.pt：就是模型本体，主要就是神经网络的参数矩阵</li>
+<li>meta_*.json：保存配置&#x2F;指标&#x2F;训练状态，推理也需要用</li>
+<li>optim_*_rank0.pt: 大概内容是“训练历史+接下来怎么训练”，主要用于继续训练</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/base_checkpoints/d12_overnight$ ll</span><br><span class="line">total 21902724</span><br><span class="line">drwxr-xr-x 2 ian ian       4096 May 25 08:17 ./</span><br><span class="line">drwxr-xr-x 5 ian ian       4096 May 25 00:26 ../</span><br><span class="line"></span><br><span class="line">-rw-r--r-- 1 ian ian       1350 May 25 00:26 meta_002000.json</span><br><span class="line">...</span><br><span class="line">-rw-r--r-- 1 ian ian       1351 May 25 08:13 meta_020000.json</span><br><span class="line">-rw-r--r-- 1 ian ian       1352 May 25 08:17 meta_020160.json</span><br><span class="line"></span><br><span class="line">-rw-r--r-- 1 ian ian  792763319 May 25 00:26 model_002000.pt</span><br><span class="line">...</span><br><span class="line">-rw-r--r-- 1 ian ian  792763319 May 25 08:13 model_020000.pt</span><br><span class="line">-rw-r--r-- 1 ian ian  792763319 May 25 08:17 model_020160.pt</span><br><span class="line"></span><br><span class="line">-rw-r--r-- 1 ian ian 1246166965 May 25 00:26 optim_002000_rank0.pt</span><br><span class="line">...</span><br><span class="line">-rw-r--r-- 1 ian ian 1246166965 May 25 08:13 optim_020000_rank0.pt</span><br><span class="line">-rw-r--r-- 1 ian ian 1246166965 May 25 08:17 optim_020160_rank0.pt</span><br></pre></td></tr></table></figure>
+
+<h3 id="评估基座模型"><a href="#评估基座模型" class="headerlink" title="评估基座模型"></a>评估基座模型</h3><p>跑<code>base_eval.py</code>，只评估模型预测下一个token的能力，产出的文件在两个地方：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/base_eval$ ll</span><br><span class="line">total 12</span><br><span class="line">drwxr-xr-x  2 ian ian 4096 May 25 17:45 ./</span><br><span class="line">drwxr-xr-x 11 ian ian 4096 May 26 11:49 ../</span><br><span class="line">-rw-r--r--  1 ian ian 1440 May 25 17:36 base_model_020160.csv</span><br><span class="line"></span><br><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/report$ ll | grep <span class="string">&#x27;base-model-eval&#x27;</span></span><br><span class="line">-rw-r--r--  1 ian ian 6277 May 25 17:36 base-model-evaluation.md</span><br><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/report$</span><br></pre></td></tr></table></figure>
+
+<p>文件内容简单解释一下：</p>
+<ul>
+<li><code>Accuracy</code>是原始正确率，<code>Centered</code>是扣掉随机&#x2F;基线后的归一化分数</li>
+<li>最后的 CORE metric 就是把这些任务的 centered 分数综合成一个总分。</li>
+<li>比如<code>arc_easy Accuracy=0.656250</code>表示<code>ARC-Easy</code>题目里大约 65.6% 答对；它的<code>Centered=0.541667</code>表示扣掉选择题随机猜中的基线后，表现还不错。</li>
+<li><code>arc_challenge Accuracy=0.218750</code>但<code>Centered=-0.041667</code>，说明这类更难题上表现比随机基线还略差一点。</li>
+</ul>
+<p>除了其他单项的指标，综合的指标主要看这两个：</p>
+<ul>
+<li>CORE metric: 0.1543 可以说是很低了（kaparthy的榜单上是0.26左右）</li>
+<li>val bpb: 0.8950 越小越好（kaparthy的榜单上是0.7左右）</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/report$ sed -n <span class="string">&#x27;1,20p&#x27;</span> /home/ian/.cache/nanochat/base_eval/base_model_020160.csv</span><br><span class="line">Task                               , Accuracy  , Centered</span><br><span class="line">hellaswag_zeroshot                 , 0.531250  , 0.375000</span><br><span class="line">jeopardy                           , 0.031250  , 0.031250</span><br><span class="line">bigbench_qa_wikidata               , 0.406250  , 0.406250</span><br><span class="line">arc_easy                           , 0.656250  , 0.541667</span><br><span class="line">arc_challenge                      , 0.218750  , -0.041667</span><br><span class="line">copa                               , 0.562500  , 0.125000</span><br><span class="line">commonsense_qa                     , 0.312500  , 0.140625</span><br><span class="line">piqa                               , 0.750000  , 0.500000</span><br><span class="line">openbook_qa                        , 0.375000  , 0.166667</span><br><span class="line">lambada_openai                     , 0.375000  , 0.375000</span><br><span class="line">hellaswag                          , 0.468750  , 0.291667</span><br><span class="line">winograd                           , 0.437500  , -0.125000</span><br><span class="line">winogrande                         , 0.468750  , -0.062500</span><br><span class="line">bigbench_dyck_languages            , 0.031250  , 0.031250</span><br><span class="line">agi_eval_lsat_ar                   , 0.187500  , -0.015625</span><br><span class="line">bigbench_cs_algorithms             , 0.375000  , 0.375000</span><br><span class="line">bigbench_operators                 , 0.093750  , 0.093750</span><br><span class="line">bigbench_repeat_copy_logic         , 0.000000  , 0.000000</span><br><span class="line">squad                              , 0.000000  , 0.000000</span><br><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/report$ sed -n <span class="string">&#x27;1,29p&#x27;</span> /home/ian/.cache/nanochat/report/base-model-evaluation.md</span><br><span class="line">---</span><br><span class="line"><span class="comment">## Base model evaluation</span></span><br><span class="line">timestamp: 2026-05-19 17:36:32</span><br><span class="line"></span><br><span class="line">- model: base_model (step 20160)</span><br><span class="line">- CORE metric: 0.1543</span><br><span class="line">- train bpb: 0.8337</span><br><span class="line">- val bpb: 0.8950</span><br><span class="line">- hellaswag_zeroshot: 0.3750</span><br><span class="line">- jeopardy: 0.0312</span><br><span class="line">- bigbench_qa_wikidata: 0.4062</span><br><span class="line">- arc_easy: 0.5417</span><br><span class="line">- arc_challenge: -0.0417</span><br><span class="line">- copa: 0.1250</span><br><span class="line">- commonsense_qa: 0.1406</span><br><span class="line">- piqa: 0.5000</span><br><span class="line">- openbook_qa: 0.1667</span><br><span class="line">- lambada_openai: 0.3750</span><br><span class="line">- hellaswag: 0.2917</span><br><span class="line">- winograd: -0.1250</span><br><span class="line">- winogrande: -0.0625</span><br><span class="line">- bigbench_dyck_languages: 0.0312</span><br><span class="line">- agi_eval_lsat_ar: -0.0156</span><br><span class="line">- bigbench_cs_algorithms: 0.3750</span><br><span class="line">- bigbench_operators: 0.0938</span><br><span class="line">- bigbench_repeat_copy_logic: 0.0000</span><br><span class="line">- squad: 0.0000</span><br><span class="line">- coqa: 0.0938</span><br><span class="line">- boolq: -0.1513</span><br><span class="line">- bigbench_language_identification: 0.2437</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="后训练"><a href="#后训练" class="headerlink" title="后训练"></a>后训练</h2><h3 id="下载SFT数据"><a href="#下载SFT数据" class="headerlink" title="下载SFT数据"></a>下载SFT数据</h3><p>在跑<code>chat_sft.py</code>的时候，会下载数据，SmolTalk&#x2F;MMLU&#x2F;GSM8K&#x2F;CustomJSON都在tasks目录下，国内网络问题很烦，提前下好了数据，是gpt5.5帮忙解决的。</p>
+<p>这些数据都在这个目录下，identity_conversations下载到了外面</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat/sft_data$ ll</span><br><span class="line">total 20</span><br><span class="line">drwxr-xr-x  5 ian ian 4096 May 25 22:18 ./</span><br><span class="line">drwxr-xr-x 11 ian ian 4096 May 26 11:49 ../</span><br><span class="line">drwxr-xr-x  3 ian ian 4096 May 25 22:18 gsm8k/</span><br><span class="line">drwxr-xr-x  3 ian ian 4096 May 25 22:08 mmlu/</span><br><span class="line">drwxr-xr-x  3 ian ian 4096 May 25 22:17 smol-smoltalk/</span><br><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat$ ll | grep <span class="string">&#x27;conversations&#x27;</span></span><br><span class="line">-rw-r--r--  1 ian ian  2511848 May 24 21:44 identity_conversations.jsonl</span><br><span class="line">(nanochat) ian@Ian-Gao-PC:~/.cache/nanochat$</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>这些数据大概都“长什么样”呢</p>
+</blockquote>
+<ul>
+<li>SmolTalk：聊天&#x2F;改写&#x2F;问答，<code>user/assistant</code>的对话格式</li>
+</ul>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;messages&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;user&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Please rewrite this sentence to sound more professional: I can&#x27;t come to the meeting because I&#x27;m busy.&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;assistant&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;I am unable to attend the meeting due to a scheduling conflict.&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;source&quot;</span><span class="punctuation">:</span> <span class="string">&quot;smol-smoltalk&quot;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>MMLU：选择题</li>
+</ul>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;question&quot;</span><span class="punctuation">:</span> <span class="string">&quot;The cyclic subgroup of Z_24 generated by 18 has order&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;subject&quot;</span><span class="punctuation">:</span> <span class="string">&quot;abstract_algebra&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;choices&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;4&quot;</span><span class="punctuation">,</span> <span class="string">&quot;8&quot;</span><span class="punctuation">,</span> <span class="string">&quot;12&quot;</span><span class="punctuation">,</span> <span class="string">&quot;6&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;answer&quot;</span><span class="punctuation">:</span> <span class="number">0</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>GSM8K：数学应用题</li>
+</ul>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;question&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Natalia sold 48 clips in April, and half as many in May. How many clips did she sell altogether?&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;answer&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Natalia sold 48/2 = 24 clips in May.\nNatalia sold 48+24 = 72 clips altogether.\n#### 72&quot;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>identity_conversations.jsonl：身份对话</li>
+</ul>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;user&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Are you ChatGPT?&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;assistant&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;I am nanochat, an open-source language model project created for learning how LLMs are trained end to end.&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;user&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;What are you trained to do?&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;assistant&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;I am trained to understand user messages and generate helpful assistant-style responses.&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="SFT-监督微调"><a href="#SFT-监督微调" class="headerlink" title="SFT 监督微调"></a>SFT 监督微调</h3><p>本阶段就是要跑<code>chat_sft.py</code>脚本，这里遇到了不少的问题。</p>
+<h4 id="1-HuggingFace限流"><a href="#1-HuggingFace限流" class="headerlink" title="1. HuggingFace限流"></a>1. HuggingFace限流</h4><p>HuggingFace报错429，下载限流问题，先编写脚本减小并发量，增加重试次数，下载到本地。然后修改脚本中的数据来源，不是从 HuggingFace 下载，而是从本地 parquet 文件读取。</p>
+<h4 id="2-torch-compile卡住"><a href="#2-torch-compile卡住" class="headerlink" title="2. torch.compile卡住"></a>2. <code>torch.compile</code>卡住</h4><p><code>torch.compile</code>其作用是为了长训练提速，对于段时间训练，可以权衡不开启，修改了脚本，增加了关闭参数，暂时关闭。</p>
+<h4 id="3-loss会NAN"><a href="#3-loss会NAN" class="headerlink" title="3. loss会NAN"></a>3. loss会NAN</h4><p>由于基座模型的参数改变了，直接训练loss会NAN，对以下参数进行了调整：</p>
+<ul>
+<li><code>max_seq_len=2048</code>: 基座模型使用的是512，但是 SFT 的数据有很多都超过了这个长度。如果还是用512，模型还是学不会这个对话的格式，因此调成了2048。</li>
+<li><code>device_batch_size=8</code>: 沿用基座模型，GPU压力能承受。</li>
+<li><code>total_batch_size=16384</code>: device_batch_size * max_seq_len &#x3D; 8 * 2048 &#x3D; 16384tokens，这样计算下来<code>grad_accum_steps=1</code>, 每轮forward&#x2F;backward都更新参数，训练反馈快，适合实验。</li>
+</ul>
+<h4 id="4-默认学习率不合适"><a href="#4-默认学习率不合适" class="headerlink" title="4.默认学习率不合适"></a>4.默认学习率不合适</h4><p>默认学习率不一定适合我现在的参数，很容易loss NAN。简单做了一个小的实验对比。</p>
+<table>
+<thead>
+<tr>
+<th>参数名</th>
+<th align="right">默认 LR</th>
+<th align="right">中 LR</th>
+<th align="right">低 LR</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>embedding_lr</td>
+<td align="right">0.3</td>
+<td align="right">0.10</td>
+<td align="right">0.03</td>
+</tr>
+<tr>
+<td>unembedding_lr</td>
+<td align="right">0.008</td>
+<td align="right">0.0025</td>
+<td align="right">0.0008</td>
+</tr>
+<tr>
+<td>matrix_lr</td>
+<td align="right">0.02</td>
+<td align="right">0.006</td>
+<td align="right">0.002</td>
+</tr>
+</tbody></table>
+<p>发现低学习率更稳定一些：<br><img src="/blog/posts/%E7%90%86%E8%A7%A3LLM%E5%85%A8%E6%B5%81%E7%A8%8B-%E7%94%A816G%E6%98%BE%E5%8D%A1%E8%B7%91nanochat/sft_bs8_lr_compare_validation_bpb.png" alt="sft_lr_compare"></p>
+<blockquote>
+<p>最终 step 31059，validation bpb 0.3986，峰值显存约 8.7 GB，约 320.93 分钟</p>
+</blockquote>
+<h4 id="产物"><a href="#产物" class="headerlink" title="产物"></a>产物</h4><p>和基座模型的结构是一样的。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ian@Ian-Gao-PC:~/.cache/nanochat/chatsft_checkpoints/d12_overnight$ ll</span><br><span class="line">total 1991164</span><br><span class="line">drwxr-xr-x  2 ian ian       4096 May 26 19:21 ./</span><br><span class="line">drwxr-xr-x 10 ian ian       4096 May 26 19:21 ../</span><br><span class="line">-rw-r--r--  1 ian ian        853 May 26 19:21 meta_031059.json</span><br><span class="line">-rw-r--r--  1 ian ian  792763319 May 26 19:21 model_031059.pt</span><br><span class="line">-rw-r--r--  1 ian ian 1246166965 May 26 19:21 optim_031059_rank0.pt</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="推理"><a href="#推理" class="headerlink" title="推理"></a>推理</h2><h3 id="Chat-eval-cli-web"><a href="#Chat-eval-cli-web" class="headerlink" title="Chat eval&#x2F;cli&#x2F;web"></a>Chat eval&#x2F;cli&#x2F;web</h3><p>对于最终的sft模型，有三处地方都会消费，也就是进行后续推理</p>
+<ul>
+<li>chat_eval.py (line 200) 加载模型用于执行评估推理</li>
+<li>chat_cli.py (line 27) 加载模型用于交互式CLI推理</li>
+<li>chat_web.py (line 122) 加载模型用于WebUI推理</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">ian@Ian-Gao-PC:~/.cache/nanochat/chatsft_checkpoints/d12_overnight$ <span class="built_in">cat</span> /home/ian/.cache/nanochat/report/chat-evaluation-sft.md</span><br><span class="line">---</span><br><span class="line"><span class="comment">## Chat evaluation sft</span></span><br><span class="line">timestamp: 2026-05-20 22:03:05</span><br><span class="line"></span><br><span class="line">- <span class="built_in">source</span>: sft</span><br><span class="line">- task_name: ARC-Easy|ARC-Challenge|MMLU|GSM8K|SpellingBee</span><br><span class="line">- temperature: 0.0000</span><br><span class="line">- max_new_tokens: 512</span><br><span class="line">- num_samples: 1</span><br><span class="line">- top_k: 50</span><br><span class="line">- batch_size: 8</span><br><span class="line">- model_tag: d12_overnight</span><br><span class="line">- step: 31,059</span><br><span class="line">- max_problems: None</span><br><span class="line">- device_type: cuda</span><br><span class="line">- ARC-Easy: 0.3918</span><br><span class="line">- ARC-Challenge: 0.3404</span><br><span class="line">- MMLU: 0.3119</span><br><span class="line">- GSM8K: 0.0485</span><br><span class="line">- SpellingBee: 0.9609</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>虽然模型不咋样，但也走完流程了。<br>推理阶段还有重要的概念，就等到下一篇文章了。</p>
+</blockquote>
+<h3 id="Chatbot小彩蛋"><a href="#Chatbot小彩蛋" class="headerlink" title="Chatbot小彩蛋"></a>Chatbot小彩蛋</h3><p><img src="/blog/posts/%E7%90%86%E8%A7%A3LLM%E5%85%A8%E6%B5%81%E7%A8%8B-%E7%94%A816G%E6%98%BE%E5%8D%A1%E8%B7%91nanochat/0efe767ec66615d365f68a3cb44dcc7b.png" alt="chatbot_hi"></p>
+<p><img src="/blog/posts/%E7%90%86%E8%A7%A3LLM%E5%85%A8%E6%B5%81%E7%A8%8B-%E7%94%A816G%E6%98%BE%E5%8D%A1%E8%B7%91nanochat/008ccb963f82c63bef5a3e91759e31c2.png" alt="chatbot_english"></p>
+<h3 id="项目地址"><a href="#项目地址" class="headerlink" title="项目地址"></a>项目地址</h3><p><a target="_blank" rel="noopener" href="https://github.com/karpathy/nanochat">https://github.com/karpathy/nanochat</a></p>
+
+      </div>
+    </article>
+  </div>
+
+  <aside class="toc-sidebar collapsed" id="tocSidebar">
+    <div class="toc-label" id="tocLabel">目录</div>
+    <nav id="tocNav"></nav>
+  </aside>
+</div>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>&copy; 2026 Ian Gao&#39;s Blog</p>
+  </footer>
+
+  <div class="lightbox-overlay" id="lightboxOverlay">
+    <img id="lightboxImg" src="" alt="">
+  </div>
+
+  
+<script src="/blog/js/main.js"></script>
+
+  
+    <div class="busuanzi-hidden" aria-hidden="true">
+      <span id="busuanzi_container_site_pv">访问量 <span id="busuanzi_value_site_pv">-</span></span>
+      <span id="busuanzi_container_site_uv">访客数 <span id="busuanzi_value_site_uv">-</span></span>
+    </div>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+  
+
+</body>
+</html>
